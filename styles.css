@@ -1,0 +1,156 @@
+/* ───────────────────────────────────────────────
+   Wakey — design tokens + animation
+   Lavender, light, friendly-rounded (Nunito)
+   ─────────────────────────────────────────────── */
+
+:root {
+  /* surfaces — subtly lavender-tinted whites */
+  --bg:          #f5f3fb;
+  --surface:     #ffffff;
+  --surface-2:   #f4f1fb;
+  --surface-3:   #ece7f8;
+
+  /* ink — soft, low-contrast purple-grays (never pure black) */
+  --ink:         #393350;
+  --ink-2:       #6a6483;
+  --ink-3:       #9c95b1;
+
+  /* brand lavender */
+  --brand:       #8a7dc8;
+  --brand-deep:  #7164b8;
+  --brand-soft:  #e7e1f8;
+  --brand-tint:  #f1ecfb;
+  --brand-glow:  rgba(138,125,200,0.35);
+  --brand-rgb:   138,125,200;
+
+  /* map palette — muted, abstract */
+  --map-land:    #efeaf8;
+  --map-land-2:  #e8e1f5;
+  --map-water:   #d8e4f1;
+  --map-park:    #d9e7d8;
+  --map-road:    #ffffff;
+  --map-road-2:  #e2dcf1;
+
+  --radius-sheet: 34px;
+  --radius-card:  24px;
+  --shadow-sheet: 0 -8px 40px rgba(70,55,120,0.10);
+  --shadow-card:  0 2px 14px rgba(80,65,140,0.07);
+  --shadow-float: 0 6px 24px rgba(70,55,120,0.14);
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  margin: 0;
+  font-family: 'Nunito', -apple-system, system-ui, sans-serif;
+  background:
+    radial-gradient(120% 90% at 50% -10%, #efe9fb 0%, #e7e3f3 55%, #ddd9ec 100%);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+#stage {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+
+/* ── keyframes ───────────────────────────────── */
+
+@keyframes sheetIn {
+  from { transform: translateY(34px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeUp {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+@keyframes popIn {
+  0%   { transform: scale(0.6); opacity: 0; }
+  60%  { transform: scale(1.08); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* breathing pin — the calm heartbeat of the sleeping screen */
+@keyframes breathe {
+  0%, 100% { transform: scale(1);    }
+  50%      { transform: scale(1.07); }
+}
+@keyframes haloPulse {
+  0%   { transform: scale(0.55); opacity: 0.55; }
+  70%  { opacity: 0; }
+  100% { transform: scale(1.9);  opacity: 0; }
+}
+@keyframes softGlow {
+  0%, 100% { opacity: 0.7; }
+  50%      { opacity: 1; }
+}
+/* drifting dots on the sleeping screen */
+@keyframes drift {
+  0%   { transform: translateY(0)   translateX(0);   opacity: 0; }
+  20%  { opacity: 0.5; }
+  80%  { opacity: 0.5; }
+  100% { transform: translateY(-46px) translateX(8px); opacity: 0; }
+}
+
+.anim-sheet { animation: sheetIn 0.5s cubic-bezier(.22,1,.36,1) both; }
+.anim-fade  { animation: fadeIn 0.45s ease both; }
+.anim-up    { animation: fadeUp 0.5s cubic-bezier(.22,1,.36,1) both; }
+.anim-pop   { animation: popIn 0.55s cubic-bezier(.34,1.56,.64,1) both; }
+
+/* staggered children */
+.stagger > * { animation: fadeUp 0.5s cubic-bezier(.22,1,.36,1) both; }
+.stagger > *:nth-child(1) { animation-delay: .04s; }
+.stagger > *:nth-child(2) { animation-delay: .10s; }
+.stagger > *:nth-child(3) { animation-delay: .16s; }
+.stagger > *:nth-child(4) { animation-delay: .22s; }
+.stagger > *:nth-child(5) { animation-delay: .28s; }
+.stagger > *:nth-child(6) { animation-delay: .34s; }
+
+.press { transition: transform .12s ease, box-shadow .2s ease, background .2s ease; }
+.press:active { transform: scale(0.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001s !important; }
+}
+
+/* hide scrollbars inside sheets */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ── radius slider ───────────────────────────── */
+.radius-range {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, var(--brand) 0%, var(--brand-soft) 100%);
+  outline: none;
+}
+.radius-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  border: 5px solid var(--brand);
+  box-shadow: 0 3px 10px rgba(113,100,184,0.4);
+  cursor: pointer;
+}
+.radius-range::-moz-range-thumb {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  border: 5px solid var(--brand);
+  box-shadow: 0 3px 10px rgba(113,100,184,0.4);
+  cursor: pointer;
+}

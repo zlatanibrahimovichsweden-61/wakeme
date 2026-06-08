@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(flutter pub *)",
+      "Bash(flutter analyze *)",
+      "Bash(flutter run *)",
+      "Bash(flutter devices *)",
+      "Bash(flutter clean *)",
+      "Bash(dart run *)",
+      "Bash(tasklist //FI \"IMAGENAME eq java.exe\")",
+      "Bash(tasklist //FI \"IMAGENAME eq dart.exe\")",
+      "Bash(grep -iE \"wakey|flutter|androidruntime|fatal\" /tmp/wakey_logcat.txt | head -100)",
+      "Read(//tmp/**)"
+    ]
+  }
+}

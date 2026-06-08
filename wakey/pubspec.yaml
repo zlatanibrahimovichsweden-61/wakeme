@@ -1,0 +1,54 @@
+name: wakey
+description: "Wakey — a location-based alarm that wakes commuters before they reach their destination."
+publish_to: 'none'
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+  google_maps_flutter: ^2.5.3
+  http: ^1.2.2
+  geolocator: ^11.0.0
+  flutter_local_notifications: ^17.0.0
+  permission_handler: ^11.3.0
+  shared_preferences: ^2.2.3
+  provider: ^6.1.2
+  flutter_dotenv: ^5.1.0
+  vibration: ^3.1.8
+  wakelock_plus: ^1.1.4
+  uuid: ^4.3.3
+  audioplayers: ^6.1.0
+  file_picker: ^8.1.4
+  path_provider: ^2.1.4
+  flutter_background_service: ^5.0.10
+  flutter_background_service_android: ^6.2.7
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  flutter_launcher_icons: ^0.13.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
+    - assets/icons/
+    - assets/sounds/
+
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "assets/icon/wakey_icon.png"
+  min_sdk_android: 21
+  remove_alpha_ios: true
+  # Adaptive icon (Android 8+): solid Wakey-indigo background, same image
+  # composed in the foreground. Re-export a transparent foreground later if
+  # you want the clean masked look.
+  adaptive_icon_background: "#0D0D1A"
+  adaptive_icon_foreground: "assets/icon/wakey_icon.png"

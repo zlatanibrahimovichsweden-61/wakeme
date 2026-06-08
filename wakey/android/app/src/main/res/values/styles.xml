@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Theme applied to the Android Window while the process is starting when the OS's Dark Mode setting is off -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Splash drawable (pre-Android 12) -->
+        <item name="android:windowBackground">@drawable/launch_background</item>
+        <!-- Splash background for Android 12+ -->
+        <item name="android:windowSplashScreenBackground">@color/splash_bg</item>
+    </style>
+    <!-- Theme applied to the Android Window as soon as the process has started.
+         Background here is shown for the split second between the splash and
+         Flutter's first frame; using the Wakey scaffold dark prevents a flash. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/ic_launcher_background</item>
+    </style>
+</resources>
