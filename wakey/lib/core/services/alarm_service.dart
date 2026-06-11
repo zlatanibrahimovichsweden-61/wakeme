@@ -1,10 +1,22 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_background_service/flutter_background_service.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
+
+// Called when the user taps the Dismiss action on the alarm notification while
+// the app is in the background or killed. Runs in a fresh Dart isolate.
+@pragma('vm:entry-point')
+void _onBgNotificationDismissed(NotificationResponse response) {
+  DartPluginRegistrant.ensureInitialized();
+  if (response.actionId == 'dismiss_alarm') {
+    FlutterBackgroundService().invoke('dismissAlarm');
+  }
+}
 
 class AlarmService extends ChangeNotifier {
   AlarmService();
@@ -53,7 +65,16 @@ class AlarmService extends ChangeNotifier {
       iOS: iosInit,
     );
 
-    await _plugin.initialize(settings);
+    await _plugin.initialize(
+      settings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        if (response.actionId == 'dismiss_alarm') {
+          // App is foregrounded — tell the background service to tear down.
+          FlutterBackgroundService().invoke('dismissAlarm');
+        }
+      },
+      onDidReceiveBackgroundNotificationResponse: _onBgNotificationDismissed,
+    );
 
     final AndroidFlutterLocalNotificationsPlugin? androidImpl = _plugin
         .resolvePlatformSpecificImplementation<
@@ -68,21 +89,13 @@ class AlarmService extends ChangeNotifier {
         enableVibration: true,
       ),
     );
-    // Android 13+ requires runtime POST_NOTIFICATIONS. Without it Android
-    // silently drops every notification we enqueue, including the alarm.
-    try {
-      await androidImpl?.requestNotificationsPermission();
-    } catch (_) {}
-    // Also request the exact-alarm permission used by scheduled notifications
-    // (cheap, no-op if already granted or unsupported).
-    try {
-      await androidImpl?.requestExactAlarmsPermission();
-    } catch (_) {}
-
-    await _plugin
-        .resolvePlatformSpecificImplementation<
-            IOSFlutterLocalNotificationsPlugin>()
-        ?.requestPermissions(alert: true, badge: true, sound: true);
+    // NOTE: POST_NOTIFICATIONS / exact-alarm / iOS prompts are deliberately NOT
+    // requested here. init() runs at provider-create, which races the location
+    // permission dialog the home screen fires at the same moment — Android can't
+    // show two system permission dialogs at once, so the notification request
+    // silently loses and notifications stay disabled (importance=NONE), dropping
+    // every alarm. The startup flow instead calls ensureNotificationPermission()
+    // SEQUENTIALLY, once the location dialog has been dismissed.
 
     // Loop the alarm tone so it keeps ringing until the user dismisses it,
     // and route through the alarm stream so it survives "ringer silent".
@@ -104,6 +117,50 @@ class AlarmService extends ChangeNotifier {
     );
 
     _initialized = true;
+  }
+
+  // Request POST_NOTIFICATIONS (Android 13+) / iOS alert permission. MUST be
+  // driven sequentially from the startup flow — never at provider-create time —
+  // so it doesn't collide with the location permission dialog (see the note in
+  // init()). Returns whether notifications are enabled afterwards.
+  Future<bool> ensureNotificationPermission() async {
+    if (!_initialized) {
+      try {
+        await init();
+      } catch (_) {}
+    }
+
+    final AndroidFlutterLocalNotificationsPlugin? androidImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>();
+    if (androidImpl != null) {
+      try {
+        bool granted = await androidImpl.areNotificationsEnabled() ?? false;
+        if (!granted) {
+          granted = await androidImpl.requestNotificationsPermission() ?? false;
+        }
+        return granted;
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final IOSFlutterLocalNotificationsPlugin? iosImpl = _plugin
+        .resolvePlatformSpecificImplementation<
+            IOSFlutterLocalNotificationsPlugin>();
+    if (iosImpl != null) {
+      try {
+        return await iosImpl.requestPermissions(
+              alert: true,
+              badge: true,
+              sound: true,
+            ) ??
+            false;
+      } catch (_) {
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> triggerAlarm(

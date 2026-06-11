@@ -34,6 +34,11 @@ const String _kSoundPath = 'wakey.bg.sound_path';
 // Set by the isolate the moment the alarm fires. The UI reads this on resume
 // so a "arrived" event that landed while the UI was suspended isn't lost.
 const String kArrivedFlag = 'wakey.bg.arrived';
+// True only while a REAL arm is active — set on Sleep, cleared on cancel /
+// arrival-dismiss. If the OS ever resurrects the foreground service without an
+// active arm (sticky restart, etc.), onStart reads this and stops immediately,
+// so the "armed" notification never shows unless the user actually armed.
+const String _kArmed = 'wakey.bg.armed';
 
 // Low-importance channel for the persistent "Wakey is armed" service
 // notification; max-importance channel for the actual arrival alarm.
@@ -84,6 +89,9 @@ class BackgroundAlarmService {
       androidConfiguration: AndroidConfiguration(
         onStart: onStart,
         autoStart: false,
+        // Don't let the OS resurrect the service on reboot or app-update — a
+        // reboot/update mid-trip should NOT silently re-arm. The user re-arms.
+        autoStartOnBoot: false,
         isForegroundMode: true,
         notificationChannelId: bgChannelId,
         initialNotificationTitle: 'Wakey is armed',
@@ -108,6 +116,7 @@ class BackgroundAlarmService {
     String? soundPath,
   }) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kArmed, true);
     await prefs.setDouble(_kDestLat, lat);
     await prefs.setDouble(_kDestLng, lng);
     await prefs.setString(_kDestName, name);
@@ -129,12 +138,32 @@ class BackgroundAlarmService {
 
   // Silence + tear down the service.
   static Future<void> stop() async {
+    // Clear the armed state + destination FIRST so a resurrected service sees
+    // "not armed" and self-terminates instead of re-arming with a stale trip.
+    final SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kArmed, false);
+    await prefs.remove(_kDestLat);
+    await prefs.remove(_kDestLng);
+    await prefs.remove(kArrivedFlag);
+
     final bool running = await _service.isRunning();
     if (running) _service.invoke('stopService');
   }
 
   // Ask the isolate to silence the alarm (used by volume / lock dismissal).
   static void dismissAlarm() => _service.invoke('dismissAlarm');
+
+  // Remove the arrival notification's visible card. Called from the UI once the
+  // full-screen alarm screen is showing, so the user sees only the screen — not
+  // the screen AND a notification. The full-screen-intent notification has
+  // already done its one job (launching the screen over the lock screen) by
+  // this point; cancelling its card does NOT stop the alarm audio (that lives
+  // in the isolate's player and is only silenced on dismiss).
+  static Future<void> hideArrivalNotification() async {
+    try {
+      await FlutterLocalNotificationsPlugin().cancel(alarmNotificationId);
+    } catch (_) {}
+  }
 }
 
 @pragma('vm:entry-point')
@@ -188,6 +217,17 @@ void onStart(ServiceInstance service) async {
   Future<void> tearDown() async {
     await silence();
     await posSub?.cancel();
+    // Clear armed state + destination so neither ArmedScreen re-shows the
+    // arrival dialog on resume nor a resurrected service re-arms with a stale
+    // trip. Covers the notification-action / volume dismiss paths that tear
+    // down via the isolate rather than BackgroundAlarmService.stop().
+    try {
+      final SharedPreferences p = await SharedPreferences.getInstance();
+      await p.setBool(_kArmed, false);
+      await p.remove(_kDestLat);
+      await p.remove(_kDestLng);
+      await p.remove(kArrivedFlag);
+    } catch (_) {}
     service.stopSelf();
   }
 
@@ -195,13 +235,16 @@ void onStart(ServiceInstance service) async {
   service.on('dismissAlarm').listen((_) => tearDown());
 
   final SharedPreferences prefs = await SharedPreferences.getInstance();
+  final bool armed = prefs.getBool(_kArmed) ?? false;
   final double? destLat = prefs.getDouble(_kDestLat);
   final double? destLng = prefs.getDouble(_kDestLng);
   final double radius = prefs.getDouble(_kRadius) ?? 500;
   final String name = prefs.getString(_kDestName) ?? 'your destination';
   final String? soundPath = prefs.getString(_kSoundPath);
 
-  if (destLat == null || destLng == null) {
+  // Resurrected without an active arm (sticky restart, etc.)? Stop immediately
+  // so the "armed" notification never appears unless the user pressed Sleep.
+  if (!armed || destLat == null || destLng == null) {
     service.stopSelf();
     return;
   }
@@ -229,14 +272,11 @@ void onStart(ServiceInstance service) async {
       'speed': pos.speed,
     });
 
-    if (service is AndroidServiceInstance) {
-      service.setForegroundNotificationInfo(
-        title: 'Wakey is armed',
-        content: distance >= 1000
-            ? '${(distance / 1000).toStringAsFixed(1)} km to $name'
-            : '${distance.round()} m to $name',
-      );
-    }
+    // NOTE: deliberately NOT calling setForegroundNotificationInfo with the
+    // live distance — the user doesn't want a "current state" notification. The
+    // foreground-service notification stays as its minimal static line (Android
+    // requires *some* notification for the service that keeps the alarm alive
+    // while locked; it can't be removed entirely).
 
     if (!alarmFired && distance <= radius) {
       alarmFired = true;
@@ -265,6 +305,14 @@ Future<void> _fireAlarm(
     enableVibration: true,
     ongoing: true,
     autoCancel: false,
+    actions: <AndroidNotificationAction>[
+      AndroidNotificationAction(
+        'dismiss_alarm',
+        'Dismiss',
+        cancelNotification: true,
+        showsUserInterface: false,
+      ),
+    ],
   );
 
   try {
@@ -274,6 +322,11 @@ Future<void> _fireAlarm(
       'You are approaching $name. Time to wake up.',
       const NotificationDetails(android: androidDetails),
     );
+  } catch (_) {}
+
+  // Remove the tracking notification so only the alarm notification is visible.
+  try {
+    await plugin.cancel(bgNotificationId);
   } catch (_) {}
 
   try {

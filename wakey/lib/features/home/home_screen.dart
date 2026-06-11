@@ -13,6 +13,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
 import '../../core/constants/app_text_styles.dart';
 import '../../core/models/destination_model.dart';
+import '../../core/services/alarm_service.dart';
 import '../../core/services/geocoding_service.dart';
 import '../../core/services/location_service.dart';
 import '../../core/services/storage_service.dart';
@@ -29,7 +30,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   static const double _sheetInitialSize = 0.35;
   static const double _sheetMinSize = 0.15;
   static const double _sheetMaxSize = 0.6;
@@ -61,37 +62,66 @@ class _HomeScreenState extends State<HomeScreen> {
   PlaceResult? _tappedPlace;
   bool _resolvingTap = false;
 
+  // Set while we've sent the user to the system Location settings because the
+  // GPS master switch was off. On resume we retry bootstrap instead of closing.
+  bool _awaitingLocationService = false;
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _bootstrap());
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _awaitingLocationService) {
+      _awaitingLocationService = false;
+      _bootstrap();
+    }
+  }
+
   Future<void> _bootstrap() async {
-    // Capture both providers before any await so we don't reach across an
-    // async gap for context later.
+    // Capture providers before any await so we don't reach across an async gap.
     final LocationService location = context.read<LocationService>();
     final StorageService storage = context.read<StorageService>();
-    // Foreground location is REQUIRED. init() triggers the system prompt the
-    // first time; on later launches it just reports the (remembered) status.
+
+    // Every permission goes straight through Android's own system prompts — no
+    // custom dialogs. They fire SEQUENTIALLY (Android shows one at a time).
+
+    // 1. Foreground location — MANDATORY.
     final LocationPermissionState perm = await location.init();
+    // GPS master switch off → Geolocator can't even prompt. Send the user to
+    // the system location settings (not a custom dialog) and retry on resume,
+    // rather than killing the app for something they can just toggle on.
+    if (perm == LocationPermissionState.serviceDisabled) {
+      _awaitingLocationService = true;
+      await Geolocator.openLocationSettings();
+      return;
+    }
+    // Permission itself denied ("Don't allow") → mandatory, so close the app.
     if (perm != LocationPermissionState.granted) {
-      if (mounted) await _showBlockingPermissionDialog(perm);
+      await SystemNavigator.pop();
       return;
     }
 
-    // Background ("Allow all the time") + battery exemption are OPTIONAL and
-    // only asked ONCE ever, the first time the user reaches home with
-    // foreground permission granted. After that we never nag — they can
-    // enable both from Settings if they want reliable background alarms.
+    // 2. Notifications — MANDATORY. The arrival alarm is delivered as a
+    //    notification, so denying it also closes the app.
+    if (!mounted) return;
+    final bool notificationsOn =
+        await context.read<AlarmService>().ensureNotificationPermission();
+    if (!notificationsOn) {
+      await SystemNavigator.pop();
+      return;
+    }
+
+    // 3 + 4. Background location ("Allow all the time") then battery exemption.
+    //    The core use case is alarming while the phone is locked and the user
+    //    sleeps, so both matter for reliability. Asked ONCE, non-blocking — the
+    //    user can skip and Wakey still runs (just less robustly when idle).
     if (!storage.askedBackgroundPermission) {
-      await _ensureBackgroundPermissionWithRationale(location);
-      // Battery-optimization exemption — the key to surviving Samsung's
-      // aggressive background killing. Only meaningful if they granted the
-      // always-permission, so gate on that to avoid an extra pointless prompt.
-      if (location.backgroundPermissionGranted) {
-        await _ensureBatteryExemptionWithRationale(location);
-      }
+      await location.ensureBackgroundPermission(allowPrompt: true);
+      await location.ensureBatteryExemption();
       await storage.markAskedBackgroundPermission();
     }
 
@@ -106,133 +136,6 @@ class _HomeScreenState extends State<HomeScreen> {
         CameraUpdate.newLatLngZoom(latLng, 15),
       );
     }
-  }
-
-  // Foreground location is mandatory. If the user denied it, explain why we
-  // can't continue and close the app — there's nothing useful Wakey can do
-  // without knowing where the phone is.
-  Future<void> _showBlockingPermissionDialog(
-      LocationPermissionState state) async {
-    final String message;
-    switch (state) {
-      case LocationPermissionState.serviceDisabled:
-        message =
-            'Location services are turned off. Wakey can\'t wake you without '
-            'them. Please enable location and reopen Wakey.';
-        break;
-      case LocationPermissionState.deniedForever:
-        message =
-            'Location permission is permanently denied. Wakey needs it to '
-            'work. Enable it from Settings, then reopen Wakey.';
-        break;
-      default:
-        message =
-            'Wakey needs location access to trigger your arrival alarm. '
-            'Without it the app can\'t function.';
-    }
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text('Location required', style: AppTextStyles.title),
-          content: Text(message, style: AppTextStyles.bodyMuted),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () {
-                Navigator.of(ctx).pop();
-                // Close the app — Wakey is non-functional without location.
-                SystemNavigator.pop();
-              },
-              child: const Text('Close'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  // One-time background-permission walk-through. On Android 11+ the "Allow all
-  // the time" choice lives on a system Settings page, so we show a rationale
-  // first so the user knows to tap it and press back.
-  Future<void> _ensureBackgroundPermissionWithRationale(
-    LocationService location,
-  ) async {
-    final bool alreadyGranted =
-        await location.ensureBackgroundPermission(allowPrompt: false);
-    if (alreadyGranted || !mounted) return;
-
-    final bool? proceed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text(
-            'Wake you even when the phone is locked?',
-            style: AppTextStyles.title,
-          ),
-          content: const Text(
-            'For Wakey to alarm after you lock the phone or switch apps, '
-            'Android needs the "Allow all the time" location permission.\n\n'
-            'On the next screen, tap "Allow all the time", then press back. '
-            'You can skip this and still use Wakey with the app open.',
-            style: AppTextStyles.bodyMuted,
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Skip'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Continue'),
-            ),
-          ],
-        );
-      },
-    );
-    if (proceed != true || !mounted) return;
-    await location.ensureBackgroundPermission(allowPrompt: true);
-  }
-
-  // One-time battery-optimization exemption walk-through. Android shows a
-  // simple one-tap "Allow / Deny" system dialog for this, so the rationale is
-  // brief — just enough that the user knows to tap Allow.
-  Future<void> _ensureBatteryExemptionWithRationale(
-    LocationService location,
-  ) async {
-    final bool? proceed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          title: const Text(
-            'One more step for reliable alarms',
-            style: AppTextStyles.title,
-          ),
-          content: const Text(
-            'Some phones (especially Samsung) put apps to sleep to save '
-            'battery, which can stop Wakey from waking you. Allowing Wakey to '
-            'ignore battery optimization keeps it running while you travel.\n\n'
-            'Tap "Continue", then choose "Allow" on the next dialog.',
-            style: AppTextStyles.bodyMuted,
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Skip'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Continue'),
-            ),
-          ],
-        );
-      },
-    );
-    if (proceed != true || !mounted) return;
-    await location.ensureBatteryExemption();
   }
 
   Future<Position?> _safeGetPosition(LocationService service) async {
@@ -505,6 +408,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _mapController?.dispose();
     super.dispose();
   }

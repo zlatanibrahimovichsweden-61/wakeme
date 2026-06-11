@@ -18,6 +18,7 @@ import '../../core/services/location_service.dart';
 import '../../core/services/routing_service.dart';
 import '../../core/services/storage_service.dart';
 import '../../core/widgets/map_controls.dart';
+import 'alarm_ringing_screen.dart';
 
 class ArmedScreen extends StatefulWidget {
   const ArmedScreen({
@@ -65,7 +66,7 @@ class _ArmedScreenState extends State<ArmedScreen>
   LatLng? _userPosition;
   double? _distance;
   bool _arrived = false;
-  bool _dialogShown = false;
+  bool _screenShown = false;
 
   // Navigation view state.
   //  _isFollowing  — true after the recenter button: camera locks to the user,
@@ -142,11 +143,16 @@ class _ArmedScreenState extends State<ArmedScreen>
     if (state == AppLifecycleState.paused && _arrived) {
       _dismissAlarm();
     }
-    // Coming back to the foreground (e.g. via the alarm's full-screen intent):
-    // the 'arrived' event may have fired while we were suspended, so check the
-    // persisted flag and surface the dialog if we missed the live event.
-    if (state == AppLifecycleState.resumed && !_arrived) {
-      _checkArrivedFlag();
+    if (state == AppLifecycleState.resumed) {
+      if (_arrived) {
+        // Arrival happened while we were suspended (a locked-screen launch via
+        // the full-screen intent, or the user opening Wakey from the heads-up
+        // notification). Now that we're foreground, surface the alarm screen.
+        _maybeShowAlarmScreen();
+      } else {
+        // The 'arrived' event may have fired while suspended — recover it.
+        _checkArrivedFlag();
+      }
     }
   }
 
@@ -327,40 +333,49 @@ class _ArmedScreenState extends State<ArmedScreen>
   }
 
   // Fired by the service when the user enters the radius. The service has
-  // already started the notification + sound + vibration; here we just bring
-  // up the dialog and arm the volume-key interception for the live screen.
+  // already started the notification + sound + vibration; here we arm the
+  // volume-key interception and (when appropriate) take over with the screen.
   void _onArrived() {
     if (_arrived) return;
     _arrived = true;
     _keyChannel.invokeMethod<void>('setAlarmActive', true);
-    if (!_dialogShown && mounted) {
-      _dialogShown = true;
-      _showArrivalDialog();
-    }
+    _maybeShowAlarmScreen();
   }
 
-  Future<void> _showArrivalDialog() async {
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (BuildContext ctx) {
-        return AlertDialog(
-          backgroundColor: AppColors.surface,
-          title:
-              const Text("You're almost there!", style: AppTextStyles.title),
-          content: Text(
-            'Wakey is buzzing because you are within ${widget.radiusMeters.round()}m of ${widget.destination.name}.\n\n'
-            'Tip: press volume or the lock button to silence it.',
-            style: AppTextStyles.bodyMuted,
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: _dismissAlarm,
-              child: const Text('Dismiss'),
-            ),
-          ],
-        );
-      },
+  // Show the full-screen alarm ONLY when the app is actually in the foreground —
+  // either we're already in Wakey, or the full-screen intent (locked arrival)
+  // just brought us forward. When the user is in ANOTHER app, we deliberately
+  // do NOT take over: the OS shows the heads-up notification (with its Dismiss
+  // action) instead, and the screen appears only if/when they open Wakey.
+  // Sound + vibration are handled by the service regardless of this.
+  void _maybeShowAlarmScreen() {
+    if (_screenShown || !_arrived || !mounted) return;
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      return; // backgrounded (another app, or still locked) — wait for resume
+    }
+    _screenShown = true;
+    // The takeover screen now stands in for the notification — remove its card.
+    BackgroundAlarmService.hideArrivalNotification();
+    _showAlarmScreen();
+  }
+
+  // Full-screen alarm (stock-alarm-clock style) on top of the map, rather than
+  // a dialog. Shown over the lock screen via MainActivity's showWhenLocked. The
+  // dismissal path is shared: the slider, volume keys, and lock button all call
+  // _dismissAlarm, which pops everything back to home.
+  Future<void> _showAlarmScreen() async {
+    await Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: true,
+        transitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (_, __, ___) => AlarmRingingScreen(
+          destinationName: widget.destination.name,
+          radiusMeters: widget.radiusMeters,
+          onDismiss: _dismissAlarm,
+        ),
+        transitionsBuilder: (_, Animation<double> anim, __, Widget child) =>
+            FadeTransition(opacity: anim, child: child),
+      ),
     );
   }
 
