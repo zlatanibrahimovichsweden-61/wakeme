@@ -105,15 +105,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       return;
     }
 
-    // 2. Notifications — MANDATORY. The arrival alarm is delivered as a
-    //    notification, so denying it also closes the app.
+    // 2. Notifications — strongly recommended, NOT fatal. The arrival alarm
+    //    shows as a notification, but if denied we warn and carry on: audio +
+    //    vibration + the full-screen intent still fire, and the user can enable
+    //    notifications later from system settings. (Closing the app on denial
+    //    soft-locks it, since Android 13+ won't re-prompt.)
     if (!mounted) return;
     final bool notificationsOn =
         await context.read<AlarmService>().ensureNotificationPermission();
-    if (!notificationsOn) {
-      await SystemNavigator.pop();
-      return;
-    }
 
     // 3 + 4. Background location ("Allow all the time") then battery exemption.
     //    The core use case is alarming while the phone is locked and the user
@@ -134,6 +133,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       });
       await _mapController?.animateCamera(
         CameraUpdate.newLatLngZoom(latLng, 15),
+      );
+    }
+
+    // Warn (don't block) if notifications were denied — shown last so the
+    // system permission dialogs above don't cover it.
+    if (!notificationsOn && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          duration: Duration(seconds: 6),
+          content: Text(
+            'Notifications are off. Wakey will still alarm with sound and '
+            'vibration, but turn them on in Settings for the full experience.',
+          ),
+        ),
       );
     }
   }
