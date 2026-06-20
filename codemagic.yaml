@@ -1,0 +1,123 @@
+# ──────────────────────────────────────────────────────────────────────────
+# Codemagic CI pipeline — builds, signs, and ships Wakey's iOS app to
+# TestFlight from a cloud Mac (you don't need your own Mac).
+#
+# ONE-TIME SETUP in the Codemagic UI before this runs:
+#   1. App Store Connect integration:
+#        Teams → Integrations → App Store Connect → add an API key.
+#        Name it "wakey_app_store" (matches `integrations.app_store_connect`).
+#   2. Environment variable group named "wakey_secrets" containing:
+#        MAPS_API_KEY = <your Google Maps key with "Maps SDK for iOS" enabled>
+#      Mark it Secure.
+#   3. In App Store Connect, create the app record with bundle id
+#        com.wakey.wakey  (so signing + TestFlight upload have a target).
+#
+# The Flutter project lives in the `wakey/` subfolder, hence working_directory.
+# ──────────────────────────────────────────────────────────────────────────
+workflows:
+  # ── FREE phase: no Apple Developer account needed ──────────────────────────
+  # Compiles the iOS app unsigned to prove it builds (pods resolve, Maps SDK +
+  # all plugins + Swift compile). Cannot install or ship — just validation.
+  # Run this now; switch to `ios-testflight` once you have the $99 account.
+  ios-build-check:
+    name: Wakey iOS — build check (unsigned, free)
+    instance_type: mac_mini_m2
+    max_build_duration: 45
+    working_directory: wakey
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: frontend
+          include: true
+    scripts:
+      - name: Inject Maps key if a secret is set (else use the committed one)
+        script: |
+          set -e
+          # Zero-setup: if you haven't created the wakey_secrets group yet, the
+          # committed .env / Maps.xcconfig are used (fine for an unsigned build —
+          # the key is only needed at runtime). Override them only if the env
+          # var is actually present.
+          if [ -n "$MAPS_API_KEY" ]; then
+            echo "MAPS_API_KEY=$MAPS_API_KEY" > .env
+            echo "MAPS_API_KEY=$MAPS_API_KEY" > ios/Flutter/Maps.xcconfig
+          fi
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Install CocoaPods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Build iOS (unsigned)
+        script: flutter build ios --release --no-codesign
+    artifacts:
+      - /tmp/xcodebuild_logs/*.log
+
+  # ── PAID phase: needs the Apple Developer account + the 3 UI setup steps ────
+  ios-testflight:
+    name: Wakey iOS — TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    working_directory: wakey
+    integrations:
+      app_store_connect: wakey_app_store
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.wakey.wakey
+      groups:
+        - wakey_secrets        # provides MAPS_API_KEY
+      vars:
+        BUNDLE_ID: "com.wakey.wakey"
+        # Fill in after you create the app in App Store Connect (the numeric
+        # "Apple ID" on the app's General Information page). Until then the
+        # build-number lookup falls back to 1.
+        APP_STORE_APP_ID: ""
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Inject secrets (.env for Dart + Maps.xcconfig for native)
+        script: |
+          set -e
+          # Dart side (flutter_dotenv) loads wakey/.env
+          echo "MAPS_API_KEY=$MAPS_API_KEY" > .env
+          # iOS native key, surfaced as the MAPS_API_KEY build setting
+          echo "MAPS_API_KEY=$MAPS_API_KEY" > ios/Flutter/Maps.xcconfig
+      - name: Flutter pub get
+        script: flutter pub get
+      - name: Install CocoaPods
+        script: find . -name "Podfile" -execdir pod install \;
+      - name: Apply signing profiles to the Xcode project
+        script: xcode-project use-profiles
+      - name: Bump build number from App Store Connect
+        script: |
+          # Use 1 + the latest TestFlight build number so uploads never clash.
+          # Falls back to 0 (→ build 1) on the very first build, before the app
+          # exists in App Store Connect / APP_STORE_APP_ID is filled in.
+          LATEST=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID" 2>/dev/null || echo 0)
+          echo "Latest TestFlight build: $LATEST"
+          echo "BUILD_NUMBER=$(($LATEST + 1))" >> $CM_ENV
+      - name: Flutter build ipa
+        script: |
+          flutter build ipa --release \
+            --build-number=${BUILD_NUMBER:-1} \
+            --export-options-plist=$HOME/export_options.plist
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Upload to TestFlight automatically; leave App Store submission manual
+        # for now so you control the public release.
+        submit_to_testflight: true
+        # submit_to_app_store: false

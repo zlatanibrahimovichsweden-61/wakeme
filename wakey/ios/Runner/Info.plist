@@ -61,5 +61,9 @@
 	<string>Wakey uses notifications to fire your arrival alarm.</string>
 	<key>UIRequiresFullScreen</key>
 	<true/>
+	<!-- Native Google Maps SDK key, fed from the MAPS_API_KEY build setting
+	     (ios/Flutter/Maps.xcconfig). Read in AppDelegate.swift. -->
+	<key>MAPS_API_KEY</key>
+	<string>$(MAPS_API_KEY)</string>
 </dict>
 </plist>

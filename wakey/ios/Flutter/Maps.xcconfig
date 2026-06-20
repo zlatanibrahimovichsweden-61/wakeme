@@ -1,0 +1,11 @@
+// iOS Google Maps SDK key, surfaced to the build as the MAPS_API_KEY build
+// setting (referenced as $(MAPS_API_KEY) in Info.plist, read in AppDelegate).
+//
+// Locally this holds the key from wakey/.env. On Codemagic this file is
+// REGENERATED in a pre-build step from the MAPS_API_KEY secret, so CI never
+// relies on whatever is committed here.
+//
+// NOTE: enable "Maps SDK for iOS" in Google Cloud Console for this key, and
+// ideally use an iOS-bundle-restricted key (com.wakey.wakey) rather than the
+// Android one.
+MAPS_API_KEY=AIzaSyAk9ZY0kuKnycZZkOU2bIL8tSZUkzqcSNM
