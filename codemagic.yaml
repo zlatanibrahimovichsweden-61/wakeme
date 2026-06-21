@@ -35,16 +35,18 @@ workflows:
         - pattern: frontend
           include: true
     scripts:
-      - name: Inject Maps key if a secret is set (else use the committed one)
+      - name: Inject Maps key + ensure .env exists
         script: |
           set -e
-          # Zero-setup: if you haven't created the wakey_secrets group yet, the
-          # committed .env / Maps.xcconfig are used (fine for an unsigned build —
-          # the key is only needed at runtime). Override them only if the env
-          # var is actually present.
+          # .env is gitignored, so it's absent in the CI clone — but pubspec
+          # lists it as a bundled asset, so it MUST exist or asset bundling
+          # fails. Always create it. Use the secret if the wakey_secrets group
+          # is set; otherwise a blank key is fine for a compile-only sim build.
           if [ -n "$MAPS_API_KEY" ]; then
             echo "MAPS_API_KEY=$MAPS_API_KEY" > .env
             echo "MAPS_API_KEY=$MAPS_API_KEY" > ios/Flutter/Maps.xcconfig
+          else
+            echo "MAPS_API_KEY=" > .env
           fi
       - name: Flutter pub get
         script: flutter pub get

@@ -38,7 +38,6 @@ flutter:
   uses-material-design: true
   assets:
     - .env
-    - assets/icons/
     - assets/sounds/
 
 flutter_launcher_icons:
