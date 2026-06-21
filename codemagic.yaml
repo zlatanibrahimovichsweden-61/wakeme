@@ -50,8 +50,12 @@ workflows:
         script: flutter pub get
       - name: Install CocoaPods
         script: find . -name "Podfile" -execdir pod install \;
-      - name: Build iOS (unsigned)
-        script: flutter build ios --release --no-codesign
+      - name: Build iOS (simulator, no signing)
+        # A simulator build needs NO Development Team / signing, so it verifies
+        # the app compiles end-to-end without an Apple Developer account.
+        # (`--no-codesign` still builds for a *device*, which Xcode forces to
+        # have a signing team — that's what failed before.)
+        script: flutter build ios --simulator
     artifacts:
       - /tmp/xcodebuild_logs/*.log
 
