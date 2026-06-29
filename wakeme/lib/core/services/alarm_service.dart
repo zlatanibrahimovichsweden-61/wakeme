@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:vibration/vibration.dart';
 
+import '../testing/test_mode.dart';
 import 'background_alarm_service.dart';
 
 // Called when the user taps the Dismiss action on the alarm notification while
@@ -16,8 +17,10 @@ import 'background_alarm_service.dart';
 @pragma('vm:entry-point')
 void _onBgNotificationDismissed(NotificationResponse response) {
   DartPluginRegistrant.ensureInitialized();
-  // ignore: avoid_print
-  print('WAKEYDBG bgNotificationResponse action=${response.actionId}');
+  if (kTestMode) {
+    // ignore: avoid_print
+    print('WAKEYDBG bgNotificationResponse action=${response.actionId}');
+  }
   if (response.actionId == 'dismiss_alarm') {
     BackgroundAlarmService.requestDismiss();
   }
@@ -73,8 +76,10 @@ class AlarmService extends ChangeNotifier {
     await _plugin.initialize(
       settings,
       onDidReceiveNotificationResponse: (NotificationResponse response) async {
-        // ignore: avoid_print
-        print('WAKEYDBG fgNotificationResponse action=${response.actionId}');
+        if (kTestMode) {
+          // ignore: avoid_print
+          print('WAKEYDBG fgNotificationResponse action=${response.actionId}');
+        }
         if (response.actionId == 'dismiss_alarm') {
           // Backup stop. The native MainActivity.handleDismissLaunch already
           // disarmed and (only if we were backgrounded) bounced the app back —
