@@ -8,7 +8,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_constants.dart';
@@ -21,6 +20,7 @@ import '../../core/services/storage_service.dart';
 import '../../core/testing/test_mode.dart'; // TEST-ONLY
 import '../../core/widgets/map_controls.dart';
 import '../confirm/confirm_screen.dart';
+import '../settings/settings_screen.dart';
 import 'saved_place_editor_screen.dart';
 import 'widgets/recent_place_card.dart';
 import 'widgets/saved_place_card.dart';
@@ -1211,7 +1211,7 @@ class _BottomSheetContent extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 20),
-          const Center(child: _PrivacyPolicyLink()),
+          const Center(child: _SettingsLink()),
           const SizedBox(height: 8),
         ],
       ),
@@ -1219,24 +1219,20 @@ class _BottomSheetContent extends StatelessWidget {
   }
 }
 
-/// Footer link to the hosted privacy policy. Opens in the external browser.
-class _PrivacyPolicyLink extends StatelessWidget {
-  const _PrivacyPolicyLink();
-
-  Future<void> _open() async {
-    final Uri uri = Uri.parse(AppConstants.privacyPolicyUrl);
-    await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
+/// Footer link into the Settings screen (About, Privacy Policy, reliability).
+class _SettingsLink extends StatelessWidget {
+  const _SettingsLink();
 
   @override
   Widget build(BuildContext context) {
-    return TextButton(
-      onPressed: _open,
-      child: Text(
-        'Privacy Policy',
-        style: AppTextStyles.bodyMuted.copyWith(
-          decoration: TextDecoration.underline,
-        ),
+    return TextButton.icon(
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
+      ),
+      icon: const Icon(Icons.settings_outlined, size: 18),
+      label: const Text(
+        'Settings',
+        style: AppTextStyles.bodyMuted,
       ),
     );
   }
