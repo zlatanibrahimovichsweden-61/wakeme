@@ -6,6 +6,11 @@ class AppConstants {
   static const String appName = 'WakeMe';
   static const String tagline = 'Sleep tight. Arrive right.';
 
+  // Store / legal.
+  static const String privacyPolicyUrl =
+      'https://github.com/zlatanibrahimovichsweden-61/wakeme/blob/main/wakeme/PRIVACY_POLICY.md';
+  static const String supportEmail = 'mohamed61fouad@gmail.com';
+
   static const LatLng fallbackLocation = LatLng(30.0444, 31.2357); // Cairo
 
   static const double defaultRadiusMeters = 500;
