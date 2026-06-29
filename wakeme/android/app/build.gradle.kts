@@ -19,6 +19,22 @@ if (hasReleaseSigning) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Resolve the Google Maps key for the native SDK's manifest placeholder.
+// Single source of truth = the project's .env (same file flutter_dotenv reads
+// at runtime), so a release build can't ship a blank map. A MAPS_API_KEY
+// environment variable, if set, still wins (handy for CI). .env is gitignored.
+val mapsApiKey: String = run {
+    System.getenv("MAPS_API_KEY")?.takeIf { it.isNotBlank() }?.let { return@run it }
+    val envFile = rootProject.file("../.env")
+    if (envFile.exists()) {
+        val env = Properties()
+        envFile.inputStream().use { env.load(it) }
+        env.getProperty("MAPS_API_KEY")?.trim().orEmpty()
+    } else {
+        ""
+    }
+}
+
 android {
     namespace = "com.wakeme.wakeme"
     // androidx.core:1.17.0 (transitive via google_maps_flutter) hard-requires
@@ -46,8 +62,7 @@ android {
         targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        manifestPlaceholders["MAPS_API_KEY"] =
-            System.getenv("MAPS_API_KEY") ?: ""
+        manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
         multiDexEnabled = true
     }
 
