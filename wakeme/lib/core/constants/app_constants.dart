@@ -27,6 +27,14 @@ class AppConstants {
   static const String prefsSavedKey = 'wakeme.saved_places';
   static const String prefsAlarmSoundPathKey = 'wakeme.alarm_sound_path';
   static const String prefsAlarmSoundLabelKey = 'wakeme.alarm_sound_label';
+  static const String prefsAlarmVolumeKey = 'wakeme.alarm_volume';
+  static const String prefsAlarmVibrateKey = 'wakeme.alarm_vibrate';
+
+  // Alarm playback defaults. Volume is 0.0–1.0 (full blast by default — it's an
+  // alarm); vibration on. Both are user-overridable from Settings and read at
+  // fire-time by the background isolate.
+  static const double defaultAlarmVolume = 1.0;
+  static const bool defaultAlarmVibrate = true;
   // Set true the first time we walk the user through the "Allow all the time"
   // background-location request, so we never nag them about it again.
   static const String prefsAskedBackgroundKey = 'wakeme.asked_background_perm';

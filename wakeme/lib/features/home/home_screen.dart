@@ -1121,17 +1121,44 @@ class _BottomSheetContent extends StatelessWidget {
       ),
       child: ListView(
         controller: scrollController,
-        padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+        // Add the system gesture/nav-bar inset so the last cards aren't hidden
+        // behind the phone's back/home/recents bar when the sheet is expanded.
+        padding: EdgeInsets.fromLTRB(
+            20, 10, 20, 24 + MediaQuery.of(context).viewPadding.bottom),
         children: <Widget>[
-          Center(
-            child: Container(
-              width: 44,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 18),
-              decoration: BoxDecoration(
-                color: AppColors.textMuted.withValues(alpha: 0.6),
-                borderRadius: BorderRadius.circular(2),
-              ),
+          SizedBox(
+            height: 34,
+            child: Stack(
+              children: <Widget>[
+                Align(
+                  alignment: Alignment.topCenter,
+                  child: Container(
+                    width: 44,
+                    height: 4,
+                    margin: const EdgeInsets.only(top: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.textMuted.withValues(alpha: 0.6),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: IconButton(
+                    iconSize: 22,
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    constraints: const BoxConstraints(),
+                    tooltip: 'Settings',
+                    icon: const Icon(Icons.settings_rounded,
+                        color: AppColors.textSecondary),
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                          builder: (_) => const SettingsScreen()),
+                    ),
+                  ),
+                ),
+              ],
             ),
           ),
           const Text('SAVED PLACES', style: AppTextStyles.sectionLabel),
@@ -1210,29 +1237,8 @@ class _BottomSheetContent extends StatelessWidget {
                 ],
               ],
             ),
-          const SizedBox(height: 20),
-          const Center(child: _SettingsLink()),
           const SizedBox(height: 8),
         ],
-      ),
-    );
-  }
-}
-
-/// Footer link into the Settings screen (About, Privacy Policy, reliability).
-class _SettingsLink extends StatelessWidget {
-  const _SettingsLink();
-
-  @override
-  Widget build(BuildContext context) {
-    return TextButton.icon(
-      onPressed: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(builder: (_) => const SettingsScreen()),
-      ),
-      icon: const Icon(Icons.settings_outlined, size: 18),
-      label: const Text(
-        'Settings',
-        style: AppTextStyles.bodyMuted,
       ),
     );
   }

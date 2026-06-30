@@ -42,6 +42,8 @@ const String _kDestLng = 'wakeme.bg.dest_lng';
 const String _kDestName = 'wakeme.bg.dest_name';
 const String _kRadius = 'wakeme.bg.radius';
 const String _kSoundPath = 'wakeme.bg.sound_path';
+const String _kVolume = 'wakeme.bg.volume';
+const String _kVibrate = 'wakeme.bg.vibrate';
 // Set by the isolate the moment the alarm fires. The UI reads this on resume
 // so a "arrived" event that landed while the UI was suspended isn't lost.
 const String kArrivedFlag = 'wakeme.bg.arrived';
@@ -129,6 +131,8 @@ class BackgroundAlarmService {
     required String name,
     required double radius,
     String? soundPath,
+    double volume = 1.0,
+    bool vibrate = true,
   }) async {
     final SharedPreferences prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_kArmed, true);
@@ -136,6 +140,8 @@ class BackgroundAlarmService {
     await prefs.setDouble(_kDestLng, lng);
     await prefs.setString(_kDestName, name);
     await prefs.setDouble(_kRadius, radius);
+    await prefs.setDouble(_kVolume, volume.clamp(0.0, 1.0));
+    await prefs.setBool(_kVibrate, vibrate);
     if (soundPath != null && soundPath.isNotEmpty) {
       await prefs.setString(_kSoundPath, soundPath);
     } else {
@@ -399,6 +405,8 @@ void onStart(ServiceInstance service) async {
   final double radius = prefs.getDouble(_kRadius) ?? 500;
   final String name = prefs.getString(_kDestName) ?? 'your destination';
   final String? soundPath = prefs.getString(_kSoundPath);
+  final double volume = prefs.getDouble(_kVolume) ?? 1.0;
+  final bool vibrate = prefs.getBool(_kVibrate) ?? true;
 
   // Resurrected without an active arm (sticky restart, etc.)? Stop immediately
   // so the "armed" notification never appears unless the user pressed Sleep.
@@ -416,7 +424,7 @@ void onStart(ServiceInstance service) async {
     alarmFired = true;
     arrivedAtMs = DateTime.now().millisecondsSinceEpoch;
     await prefs.setBool(kArrivedFlag, true);
-    await _fireAlarm(plugin, player, name, soundPath);
+    await _fireAlarm(plugin, player, name, soundPath, volume, vibrate);
     service.invoke('arrived', <String, dynamic>{'name': name});
 
     // While ringing, poll once a second for any reason to stop:
@@ -530,10 +538,14 @@ Future<void> _fireAlarm(
   AudioPlayer player,
   String name,
   String? soundPath,
+  double volume,
+  bool vibrate,
 ) async {
   const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
     alarmChannelId,
     _alarmChannelName,
+    // Branded white status-bar silhouette (see res/drawable-*/ic_bg_service_small).
+    icon: 'ic_bg_service_small',
     importance: Importance.max,
     priority: Priority.max,
     fullScreenIntent: true,
@@ -575,20 +587,23 @@ Future<void> _fireAlarm(
   } catch (_) {}
 
   try {
-    final bool hasVibrator = await Vibration.hasVibrator();
-    if (hasVibrator) {
-      Vibration.vibrate(pattern: _vibrationPattern, repeat: 0);
+    if (vibrate) {
+      final bool hasVibrator = await Vibration.hasVibrator();
+      if (hasVibrator) {
+        Vibration.vibrate(pattern: _vibrationPattern, repeat: 0);
+      }
     }
   } catch (_) {}
 
   try {
+    final double vol = volume.clamp(0.0, 1.0);
     final bool useCustom = soundPath != null &&
         soundPath.isNotEmpty &&
         File(soundPath).existsSync();
     if (useCustom) {
-      await player.play(DeviceFileSource(soundPath), volume: 1.0);
+      await player.play(DeviceFileSource(soundPath), volume: vol);
     } else {
-      await player.play(AssetSource(_alarmSoundAsset), volume: 1.0);
+      await player.play(AssetSource(_alarmSoundAsset), volume: vol);
     }
   } catch (_) {}
 }

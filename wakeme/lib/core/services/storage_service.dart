@@ -14,6 +14,8 @@ class StorageService extends ChangeNotifier {
   List<DestinationModel> _saved = <DestinationModel>[];
   String? _alarmSoundPath;
   String? _alarmSoundLabel;
+  double _alarmVolume = AppConstants.defaultAlarmVolume;
+  bool _alarmVibrate = AppConstants.defaultAlarmVibrate;
 
   List<DestinationModel> get recent => List.unmodifiable(_recent);
   List<DestinationModel> get saved => List.unmodifiable(_saved);
@@ -21,6 +23,11 @@ class StorageService extends ChangeNotifier {
   // null => use the bundled default beep
   String? get alarmSoundPath => _alarmSoundPath;
   String? get alarmSoundLabel => _alarmSoundLabel;
+
+  // Alarm playback prefs (0.0–1.0 volume; vibration on/off). Defaults applied
+  // when the keys were never written.
+  double get alarmVolume => _alarmVolume;
+  bool get alarmVibrate => _alarmVibrate;
 
   // True once we've taken the user through the background-location prompt.
   bool get askedBackgroundPermission =>
@@ -42,6 +49,10 @@ class StorageService extends ChangeNotifier {
     }
     _alarmSoundPath = _prefs?.getString(AppConstants.prefsAlarmSoundPathKey);
     _alarmSoundLabel = _prefs?.getString(AppConstants.prefsAlarmSoundLabelKey);
+    _alarmVolume = _prefs?.getDouble(AppConstants.prefsAlarmVolumeKey) ??
+        AppConstants.defaultAlarmVolume;
+    _alarmVibrate = _prefs?.getBool(AppConstants.prefsAlarmVibrateKey) ??
+        AppConstants.defaultAlarmVibrate;
     notifyListeners();
   }
 
@@ -85,6 +96,18 @@ class StorageService extends ChangeNotifier {
     _alarmSoundLabel = null;
     await _prefs?.remove(AppConstants.prefsAlarmSoundPathKey);
     await _prefs?.remove(AppConstants.prefsAlarmSoundLabelKey);
+    notifyListeners();
+  }
+
+  Future<void> setAlarmVolume(double volume) async {
+    _alarmVolume = volume.clamp(0.0, 1.0);
+    await _prefs?.setDouble(AppConstants.prefsAlarmVolumeKey, _alarmVolume);
+    notifyListeners();
+  }
+
+  Future<void> setAlarmVibrate(bool enabled) async {
+    _alarmVibrate = enabled;
+    await _prefs?.setBool(AppConstants.prefsAlarmVibrateKey, enabled);
     notifyListeners();
   }
 

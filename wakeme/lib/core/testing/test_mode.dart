@@ -21,7 +21,7 @@ import '../services/background_alarm_service.dart';
 // ════════════════════════════════════════════════════════════════════════
 
 /// Master switch for the whole testing harness. Flip to false to disable.
-const bool kTestMode = true;
+const bool kTestMode = false;
 
 /// Small floating 🧪 button that opens the test panel. Renders nothing when
 /// the harness is off, so it's safe to leave in the widget tree unconditionally.

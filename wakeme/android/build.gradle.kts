@@ -21,9 +21,10 @@ subprojects {
 
 // Force every Android module (app + all plugin subprojects, e.g. :jni) onto the
 // NDK that's actually installed and valid locally. flutter.ndkVersion resolves
-// to 28.2.13676358, whose auto-download stalled and left a corrupt folder with
-// no source.properties — that's what fails the :jni CXX configuration. Pinning
-// it in :app alone isn't enough, so set it for all subprojects here.
+// to 29.0.13113456, whose auto-download stalls on this network and leaves a
+// corrupt folder with no source.properties — that's what fails the :jni CXX
+// configuration. Pinning it in :app alone isn't enough, so set it for all
+// subprojects here.
 subprojects {
     val setNdk = {
         val androidExt = extensions.findByName("android")
@@ -31,7 +32,7 @@ subprojects {
             runCatching {
                 androidExt.javaClass
                     .getMethod("setNdkVersion", String::class.java)
-                    .invoke(androidExt, "29.0.13113456")
+                    .invoke(androidExt, "28.2.13676358")
             }
         }
         Unit

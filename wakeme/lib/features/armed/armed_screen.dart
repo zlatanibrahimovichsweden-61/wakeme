@@ -105,7 +105,8 @@ class _ArmedScreenState extends State<ArmedScreen> {
 
   Future<void> _arm() async {
     final LocationService location = context.read<LocationService>();
-    final String? customPath = context.read<StorageService>().alarmSoundPath;
+    final StorageService storage = context.read<StorageService>();
+    final String? customPath = storage.alarmSoundPath;
     await WakelockPlus.enable();
     await location.init();
 
@@ -118,6 +119,8 @@ class _ArmedScreenState extends State<ArmedScreen> {
       name: widget.destination.name,
       radius: widget.radiusMeters,
       soundPath: customPath,
+      volume: storage.alarmVolume,
+      vibrate: storage.alarmVibrate,
     );
 
     // Seed the camera + initial route from a one-shot position read; live

@@ -41,10 +41,10 @@ android {
     // compileSdk 36. targetSdk is 35 (Android 15) to meet Google Play's current
     // minimum target-API requirement for new apps / updates.
     compileSdk = 36
-    // Pinned to the NDK already installed locally. flutter.ndkVersion resolves
-    // to 28.2.13676358, which wasn't present and whose auto-download stalled;
-    // 29.0.13113456 is already on disk, so we use it to avoid the re-download.
-    ndkVersion = "29.0.13113456"
+    // Pinned to the NDK already installed locally to avoid a ~1 GB auto-download
+    // (which stalls on this network). 28.2.13676358 is the complete NDK present
+    // on disk here; 29.0.13113456's download stalled mid-fetch.
+    ndkVersion = "28.2.13676358"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
